@@ -412,44 +412,41 @@ function calcExt(){
 }
 
 // GPS
-function gps(){
-  var box=document.getElementById('gps-box');
-  var st=document.getElementById('gs');
-  if(location.protocol==='file:'){
-    if(box)box.className='gps-box erro';
-    if(st)st.innerHTML='<b>GPS indisponivel no PC.</b><br>Use o app via Netlify no celular para capturar GPS. No PC, preencha manualmente se necessario.';
-    var flat=document.getElementById('flat');
-    var flon=document.getElementById('flon');
-    if(flat)flat.removeAttribute('readonly');
-    if(flon)flon.removeAttribute('readonly');
-    return;
-  }
-  if(!navigator.geolocation){
-    if(box)box.className='gps-box erro';
-    if(st)st.innerHTML='GPS indisponivel neste dispositivo.';
-    return;
-  }
-  if(box)box.className='gps-box buscando';
-  if(st)st.innerHTML='Aguarde, buscando sinal GPS...';
-  navigator.geolocation.getCurrentPosition(
-    function(p){
-      document.getElementById('flat').value=p.coords.latitude.toFixed(6);
-      document.getElementById('flon').value=p.coords.longitude.toFixed(6);
-      if(box)box.className='gps-box ok';
-      if(st)st.innerHTML='GPS capturado com sucesso &plusmn;'+Math.round(p.coords.accuracy)+'m';
-    },
-    function(e){
-      if(box)box.className='gps-box erro';
-      if(e.code===1){
-        if(st)st.innerHTML='<b>Permissao negada.</b><br><br>Para liberar no Android Chrome:<br>1. Toque no icone de cadeado na barra de endereco<br>2. Toque em Permissoes<br>3. Localizacao → Permitir<br><br>Depois toque em CAPTURAR GPS novamente.';
-      }else if(e.code===2){
-        if(st)st.innerHTML='Sinal GPS fraco. Va para area aberta e tente novamente.';
-      }else{
-        if(st)st.innerHTML='Tempo esgotado. Verifique se o GPS do celular esta ativo.';
+async function gps() {
+  var box = document.getElementById('gps-box');
+  var st = document.getElementById('gs');
+
+  if (box) box.className = 'gps-box buscando';
+  if (st) st.innerHTML = 'Obtendo localização...';
+
+  try {
+    navigator.geolocation.getCurrentPosition(
+      function(pos) {
+        document.getElementById('flat').value =
+          pos.coords.latitude.toFixed(6);
+
+        document.getElementById('flon').value =
+          pos.coords.longitude.toFixed(6);
+
+        if (box) box.className = 'gps-box ok';
+        if (st) st.innerHTML = 'GPS capturado com sucesso.';
+      },
+      function(err) {
+        if (box) box.className = 'gps-box erro';
+        if (st) st.innerHTML =
+          'Erro ao obter GPS: ' + err.message;
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 0
       }
-    },
-    {enableHighAccuracy:true,timeout:20000,maximumAge:0}
-  );
+    );
+  } catch (e) {
+    if (box) box.className = 'gps-box erro';
+    if (st) st.innerHTML =
+      'Permissão negada ou GPS indisponível.';
+  }
 }
 
 // FOTOS
@@ -918,5 +915,6 @@ function toast(msg,tp){
 init();
 
 </script>
+  <script src="capacitor.js"></script>
 </body>
 </html>
