@@ -27,16 +27,25 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Install Capacitor plugins
+        run: |
+          npm install @capacitor/geolocation
+          npm install @capacitor/camera
+
       - name: Create www folder
         run: |
           mkdir -p www
           cp index.html www/index.html
 
       - name: Init Capacitor
-        run: npx cap init "Levantamento Rodoviario" "br.com.caminhosdacelulose.levantamento" --web-dir www
+        run: |
+          npx cap init "Levantamento Rodoviario" "br.com.caminhosdacelulose.levantamento" --web-dir www
 
       - name: Add Android platform
         run: npx cap add android
+
+      - name: Sync Capacitor
+        run: npx cap sync android
 
       - name: Copy web assets
         run: npx cap copy android
