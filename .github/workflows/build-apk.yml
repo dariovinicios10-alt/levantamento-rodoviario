@@ -50,25 +50,23 @@ jobs:
           fi
 
           # Configurar init script global do Gradle com mirrors
-          mkdir -p ~/.gradle/init.d
-          cat > ~/.gradle/init.d/mirrors.gradle << 'GRADLEOF'
-allprojects {
-  buildscript {
-    repositories {
-      maven { url "https://maven.google.com/" }
-      google()
-      mavenCentral()
-      maven { url "https://jitpack.io" }
-    }
-  }
-  repositories {
-    maven { url "https://maven.google.com/" }
-    google()
-    mavenCentral()
-    maven { url "https://jitpack.io" }
-  }
-}
-GRADLEOF
+         mkdir -p ~/.gradle/init.d
+echo 'allprojects {' > ~/.gradle/init.d/mirrors.gradle
+echo '  buildscript {' >> ~/.gradle/init.d/mirrors.gradle
+echo '    repositories {' >> ~/.gradle/init.d/mirrors.gradle
+echo '      maven { url "https://maven.google.com/" }' >> ~/.gradle/init.d/mirrors.gradle
+echo '      google()' >> ~/.gradle/init.d/mirrors.gradle
+echo '      mavenCentral()' >> ~/.gradle/init.d/mirrors.gradle
+echo '      maven { url "https://jitpack.io" }' >> ~/.gradle/init.d/mirrors.gradle
+echo '    }' >> ~/.gradle/init.d/mirrors.gradle
+echo '  }' >> ~/.gradle/init.d/mirrors.gradle
+echo '  repositories {' >> ~/.gradle/init.d/mirrors.gradle
+echo '    maven { url "https://maven.google.com/" }' >> ~/.gradle/init.d/mirrors.gradle
+echo '    google()' >> ~/.gradle/init.d/mirrors.gradle
+echo '    mavenCentral()' >> ~/.gradle/init.d/mirrors.gradle
+echo '    maven { url "https://jitpack.io" }' >> ~/.gradle/init.d/mirrors.gradle
+echo '  }' >> ~/.gradle/init.d/mirrors.gradle
+echo '}' >> ~/.gradle/init.d/mirrors.gradle
           echo "Mirrors configurados"
           cat ~/.gradle/init.d/mirrors.gradle
 
