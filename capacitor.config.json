@@ -1,0 +1,13 @@
+{
+  "appId": "br.com.caminhosdacelulose.levantamento",
+  "appName": "Levantamento Rodoviario",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 0
+    }
+  }
+}
