@@ -1,68 +1,67 @@
+```yaml
 name: Build APK
 
 on:
-push:
-branches: [ main ]
-workflow_dispatch:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
 
 jobs:
-build:
-runs-on: ubuntu-latest
+  build:
+    runs-on: ubuntu-latest
 
-```
-steps:
-  - name: Checkout
-    uses: actions/checkout@v4
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-  - name: Setup Node.js
-    uses: actions/setup-node@v4
-    with:
-      node-version: '18'
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
 
-  - name: Setup Java
-    uses: actions/setup-java@v4
-    with:
-      java-version: '17'
-      distribution: 'temurin'
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: "temurin"
 
-  - name: Install dependencies
-    run: npm install
+      - name: Install dependencies
+        run: npm install
 
-  - name: Install Capacitor plugins
-    run: |
-      npm install @capacitor/geolocation@5 @capacitor/camera@5
+      - name: Install Capacitor plugins
+        run: npm install @capacitor/geolocation@5 @capacitor/camera@5
 
-  - name: Create www folder
-    run: |
-      mkdir -p www
-      cp index.html www/index.html
+      - name: Create www folder
+        run: |
+          mkdir -p www
+          cp index.html www/index.html
 
-  - name: Init Capacitor
-    run: |
-      npx cap init "Levantamento Rodoviario" "br.com.caminhosdacelulose.levantamento" --web-dir www
+      - name: Init Capacitor
+        run: npx cap init "Levantamento Rodoviario" "br.com.caminhosdacelulose.levantamento" --web-dir www
 
-  - name: Add Android platform
-    run: npx cap add android
+      - name: Add Android platform
+        run: npx cap add android
 
-  - name: Sync Capacitor
-    run: npx cap sync android
+      - name: Sync Capacitor
+        run: npx cap sync android
 
-  - name: Copy web assets
-    run: npx cap copy android
+      - name: Copy web assets
+        run: npx cap copy android
 
-  - name: Setup Android SDK
-    uses: android-actions/setup-android@v3
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
 
-  - name: Build debug APK
-    run: |
-      cd android
-      chmod +x gradlew
-      ./gradlew assembleDebug
+      - name: Build debug APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
 
-  - name: Upload APK
-    uses: actions/upload-artifact@v4
-    with:
-      name: levantamento-rodoviario-debug
-      path: android/app/build/outputs/apk/debug/app-debug.apk
-      retention-days: 30
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: levantamento-rodoviario-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
 ```
