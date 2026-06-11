@@ -1087,7 +1087,7 @@ function downloadBlob(blob,filename,mimeType){
 
 var MS_CLIENT_ID   = 'b06106e3-083b-4635-b3b4-525ab54197f6';
 var MS_TENANT_ID   = '7876d343-00f5-4c18-9764-5133f545aec6';
-var MS_SCOPE       = 'https://graph.microsoft.com/Files.ReadWrite https://graph.microsoft.com/User.Read offline_access';
+var MS_SCOPE       = 'https://graph.microsoft.com/Files.ReadWrite.All https://graph.microsoft.com/Sites.ReadWrite.All https://graph.microsoft.com/User.Read offline_access';
 var MS_SHAREPOINT  = 'caminhosdacelulose.sharepoint.com';
 var MS_SITE_PATH   = '/sites/conservacao';
 var SP_FOLDER      = 'Conservacao/Levantamentos';
@@ -1226,14 +1226,12 @@ function atuStatusSync(){
 
 // --- SHAREPOINT: garantir pasta ---
 function spGarantirPasta(token, caminho){
-  // Criar pasta no OneDrive do usuario logado
-  var url = 'https://graph.microsoft.com/v1.0/me/drive/root:/'+caminho+':/children';
   var partes = caminho.split('/');
   var nome = partes[partes.length-1];
   var pai  = partes.slice(0,-1).join('/');
   var urlPai = pai
-    ? 'https://graph.microsoft.com/v1.0/me/drive/root:/'+pai+':/children'
-    : 'https://graph.microsoft.com/v1.0/me/drive/root/children';
+    ? 'https://graph.microsoft.com/v1.0/sites/'+MS_SHAREPOINT+':/sites/conservacao:/drive/root:/'+pai+':/children'
+    : 'https://graph.microsoft.com/v1.0/sites/'+MS_SHAREPOINT+':/sites/conservacao:/drive/root/children';
   return fetch(urlPai,{
     method:'POST',
     headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json'},
@@ -1244,7 +1242,7 @@ function spGarantirPasta(token, caminho){
 // --- SUBIR FOTO ---
 function spSubirFoto(token, caminhoArq, b64data){
   var blob = b64toBlob(b64data.split(',')[1]||b64data, 'image/jpeg');
-  var url = 'https://graph.microsoft.com/v1.0/me/drive/root:/'+caminhoArq+':/content';
+  var url = 'https://graph.microsoft.com/v1.0/sites/'+MS_SHAREPOINT+':/sites/conservacao:/drive/root:/'+caminhoArq+':/content';
   return fetch(url,{
     method:'PUT',
     headers:{'Authorization':'Bearer '+token,'Content-Type':'image/jpeg'},
@@ -1301,7 +1299,7 @@ function sincronizarRegistro(rec, token){
 function spAtualizarExcel(token, pasta, rec, fiscal){
   // Usar arquivo CSV simples que o Excel abre nativamente
   var nomeArquivo = 'levantamentos.csv';
-  var urlArq = 'https://graph.microsoft.com/v1.0/me/drive/root:/'+SP_FOLDER+'/levantamentos_geral.csv';
+  var urlArq = 'https://graph.microsoft.com/v1.0/sites/'+MS_SHAREPOINT+':/sites/conservacao:/drive/root:/'+SP_FOLDER+'/levantamentos_geral.csv';
 
   // Linha do registro
   var nf = rec.fotos ? rec.fotos.length : 0;
