@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Autenticando...</title>
+<style>
+body{font-family:Arial,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#f2f2f2;}
+.box{text-align:center;background:#fff;padding:30px;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,.1);}
+.logo{font-size:40px;margin-bottom:10px;}
+h3{color:#0e2841;margin:0 0 8px;}
+p{color:#5a6a7a;font-size:13px;}
+</style>
+</head>
+<body>
+<div class="box">
+  <div class="logo">&#9729;</div>
+  <h3>Autenticando com Microsoft...</h3>
+  <p>Aguarde, você será redirecionado.</p>
+</div>
+<script>
+// Pegar o code da URL e salvar no localStorage para o app principal
+var params = new URLSearchParams(window.location.search);
+var code = params.get('code');
+if(code){
+  localStorage.setItem('ms_auth_code', code);
+  // Fechar popup e notificar janela pai
+  if(window.opener){
+    window.opener.postMessage({type:'ms_auth_code', code:code}, '*');
+    setTimeout(function(){ window.close(); }, 500);
+  } else {
+    // Redirect direto para o app com o code
+    window.location.href = 'https://levantamentoconservacao.netlify.app/?code='+encodeURIComponent(code);
+  }
+} else {
+  document.querySelector('p').textContent = 'Erro na autenticação. Feche e tente novamente.';
+}
+</script>
+</body>
+</html>
