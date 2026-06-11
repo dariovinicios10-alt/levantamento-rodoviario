@@ -1087,10 +1087,11 @@ function downloadBlob(blob,filename,mimeType){
 
 var MS_CLIENT_ID   = 'b06106e3-083b-4635-b3b4-525ab54197f6';
 var MS_TENANT_ID   = '7876d343-00f5-4c18-9764-5133f545aec6';
-var MS_SCOPE       = 'https://graph.microsoft.com/Files.ReadWrite.All https://graph.microsoft.com/Sites.ReadWrite.All https://graph.microsoft.com/User.Read offline_access';
+var MS_SCOPE       = 'https://graph.microsoft.com/Files.ReadWrite https://graph.microsoft.com/User.Read offline_access';
 var MS_SHAREPOINT  = 'caminhosdacelulose.sharepoint.com';
 var MS_SITE_PATH   = '/sites/conservacao';
-var SP_FOLDER      = 'Levantamentos';
+var SP_FOLDER      = 'Conservacao/Levantamentos';
+var GRAPH_BASE     = 'https://graph.microsoft.com/v1.0/me/drive/root:/';
 
 var msToken = null;
 var msUser  = null;
@@ -1225,33 +1226,25 @@ function atuStatusSync(){
 
 // --- SHAREPOINT: garantir pasta ---
 function spGarantirPasta(token, caminho){
-  var url = 'https://graph.microsoft.com/v1.0/sites/'+MS_SHAREPOINT+':'+MS_SITE_PATH
-    +':/drive/root:/'+caminho;
-  return fetch(url,{headers:{'Authorization':'Bearer '+token}})
-    .then(function(r){
-      if(r.status===404){
-        // Criar pasta
-        var partes = caminho.split('/');
-        var nome = partes.pop();
-        var pai  = partes.join('/');
-        var urlPai = pai
-          ? 'https://graph.microsoft.com/v1.0/sites/'+MS_SHAREPOINT+':'+MS_SITE_PATH+':/drive/root:/'+pai+':/children'
-          : 'https://graph.microsoft.com/v1.0/sites/'+MS_SHAREPOINT+':'+MS_SITE_PATH+':/drive/root/children';
-        return fetch(urlPai,{
-          method:'POST',
-          headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json'},
-          body:JSON.stringify({name:nome,folder:{},['@microsoft.graph.conflictBehavior']:'rename'})
-        });
-      }
-      return r;
-    });
+  // Criar pasta no OneDrive do usuario logado
+  var url = 'https://graph.microsoft.com/v1.0/me/drive/root:/'+caminho+':/children';
+  var partes = caminho.split('/');
+  var nome = partes[partes.length-1];
+  var pai  = partes.slice(0,-1).join('/');
+  var urlPai = pai
+    ? 'https://graph.microsoft.com/v1.0/me/drive/root:/'+pai+':/children'
+    : 'https://graph.microsoft.com/v1.0/me/drive/root/children';
+  return fetch(urlPai,{
+    method:'POST',
+    headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json'},
+    body:JSON.stringify({name:nome,folder:{},['@microsoft.graph.conflictBehavior']:'replace'})
+  });
 }
 
 // --- SUBIR FOTO ---
 function spSubirFoto(token, caminhoArq, b64data){
   var blob = b64toBlob(b64data.split(',')[1]||b64data, 'image/jpeg');
-  var url = 'https://graph.microsoft.com/v1.0/sites/'+MS_SHAREPOINT+':'+MS_SITE_PATH
-    +':/drive/root:/'+caminhoArq+':/content';
+  var url = 'https://graph.microsoft.com/v1.0/me/drive/root:/'+caminhoArq+':/content';
   return fetch(url,{
     method:'PUT',
     headers:{'Authorization':'Bearer '+token,'Content-Type':'image/jpeg'},
@@ -1308,8 +1301,7 @@ function sincronizarRegistro(rec, token){
 function spAtualizarExcel(token, pasta, rec, fiscal){
   // Usar arquivo CSV simples que o Excel abre nativamente
   var nomeArquivo = 'levantamentos.csv';
-  var urlArq = 'https://graph.microsoft.com/v1.0/sites/'+MS_SHAREPOINT+':'+MS_SITE_PATH
-    +':/drive/root:/'+SP_FOLDER+'/levantamentos_geral.csv';
+  var urlArq = 'https://graph.microsoft.com/v1.0/me/drive/root:/'+SP_FOLDER+'/levantamentos_geral.csv';
 
   // Linha do registro
   var nf = rec.fotos ? rec.fotos.length : 0;
@@ -1418,6 +1410,7 @@ function sincronizarPendentes(){
           .then(function(){ idx++; proxima(); })
           .catch(function(e){ 
             console.log('Erro sync:', e);
+            toast('Erro ao salvar: '+e.message,'e');
             idx++; proxima();
           });
       }
