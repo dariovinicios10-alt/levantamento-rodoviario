@@ -1090,7 +1090,7 @@ var MS_TENANT_ID   = '7876d343-00f5-4c18-9764-5133f545aec6';
 var MS_SCOPE       = 'https://graph.microsoft.com/Files.ReadWrite.All https://graph.microsoft.com/Sites.ReadWrite.All https://graph.microsoft.com/User.Read offline_access';
 var MS_SHAREPOINT  = 'caminhosdacelulose.sharepoint.com';
 var MS_SITE_PATH   = '/sites/conservacao';
-var SP_FOLDER      = 'Conservacao/Levantamentos';
+var SP_FOLDER      = 'Documentos/Levantamentos';
 var GRAPH_BASE     = 'https://graph.microsoft.com/v1.0/me/drive/root:/';
 
 var msToken = null;
@@ -1228,28 +1228,45 @@ function atuStatusSync(){
 }
 
 // --- SHAREPOINT: garantir pasta ---
+function spGetSiteId(token){
+  if(window._spSiteId) return Promise.resolve(window._spSiteId);
+  return fetch('https://graph.microsoft.com/v1.0/sites/'+MS_SHAREPOINT+':/sites/conservacao',{
+    headers:{'Authorization':'Bearer '+token}
+  }).then(function(r){return r.json();}).then(function(s){
+    window._spSiteId = s.id;
+    return s.id;
+  });
+}
+
 function spGarantirPasta(token, caminho){
-  var partes = caminho.split('/');
-  var nome = partes[partes.length-1];
-  var pai  = partes.slice(0,-1).join('/');
-  var urlPai = pai
-    ? 'https://graph.microsoft.com/v1.0/sites/'+MS_SHAREPOINT+':/sites/conservacao:/drive/root:/'+pai+':/children'
-    : 'https://graph.microsoft.com/v1.0/sites/'+MS_SHAREPOINT+':/sites/conservacao:/drive/root/children';
-  return fetch(urlPai,{
-    method:'POST',
-    headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json'},
-    body:JSON.stringify({name:nome,folder:{},['@microsoft.graph.conflictBehavior']:'replace'})
+  return spGetSiteId(token).then(function(siteId){
+    var partes = caminho.split('/');
+    var nome = partes[partes.length-1];
+    var pai  = partes.slice(0,-1).join('/');
+    var urlPai = pai
+      ? 'https://graph.microsoft.com/v1.0/sites/'+siteId+'/drive/root:/'+pai+':/children'
+      : 'https://graph.microsoft.com/v1.0/sites/'+siteId+'/drive/root/children';
+    return fetch(urlPai,{
+      method:'POST',
+      headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json'},
+      body:JSON.stringify({name:nome,folder:{},['@microsoft.graph.conflictBehavior']:'replace'})
+    }).then(function(r){return r.json();}).then(function(d){
+      console.log('Pasta criada:', nome, d);
+      return d;
+    });
   });
 }
 
 // --- SUBIR FOTO ---
 function spSubirFoto(token, caminhoArq, b64data){
-  var blob = b64toBlob(b64data.split(',')[1]||b64data, 'image/jpeg');
-  var url = 'https://graph.microsoft.com/v1.0/sites/'+MS_SHAREPOINT+':/sites/conservacao:/drive/root:/'+caminhoArq+':/content';
-  return fetch(url,{
-    method:'PUT',
-    headers:{'Authorization':'Bearer '+token,'Content-Type':'image/jpeg'},
-    body:blob
+  return spGetSiteId(token).then(function(siteId){
+    var blob = b64toBlob(b64data.split(',')[1]||b64data, 'image/jpeg');
+    var url = 'https://graph.microsoft.com/v1.0/sites/'+siteId+'/drive/root:/'+caminhoArq+':/content';
+    return fetch(url,{
+      method:'PUT',
+      headers:{'Authorization':'Bearer '+token,'Content-Type':'image/jpeg'},
+      body:blob
+    });
   });
 }
 
@@ -1302,7 +1319,10 @@ function sincronizarRegistro(rec, token){
 function spAtualizarExcel(token, pasta, rec, fiscal){
   // Usar arquivo CSV simples que o Excel abre nativamente
   var nomeArquivo = 'levantamentos.csv';
-  var urlArq = 'https://graph.microsoft.com/v1.0/sites/'+MS_SHAREPOINT+':/sites/conservacao:/drive/root:/'+SP_FOLDER+'/levantamentos_geral.csv';
+  var siteId = window._spSiteId||'';
+  var urlArq = siteId
+    ? 'https://graph.microsoft.com/v1.0/sites/'+siteId+'/drive/root:/'+SP_FOLDER+'/levantamentos_geral.csv'
+    : 'https://graph.microsoft.com/v1.0/sites/'+MS_SHAREPOINT+':/sites/conservacao:/drive/root:/'+SP_FOLDER+'/levantamentos_geral.csv';
 
   // Linha do registro
   var nf = rec.fotos ? rec.fotos.length : 0;
