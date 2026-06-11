@@ -14,7 +14,7 @@ p{color:#5a6a7a;font-size:13px;line-height:1.6;}
 .spinner{display:inline-block;width:28px;height:28px;border:3px solid #e0e0e0;border-top-color:#00b050;border-radius:50%;animation:spin 1s linear infinite;margin-top:16px;}
 @keyframes spin{to{transform:rotate(360deg)}}
 .erro{color:#e84040;font-size:12px;margin-top:12px;line-height:1.5;}
-.ok{color:#00b050;font-size:14px;font-weight:700;margin-top:12px;}
+.ok{color:#00b050;font-size:15px;font-weight:700;margin-top:12px;}
 </style>
 </head>
 <body>
@@ -24,7 +24,7 @@ p{color:#5a6a7a;font-size:13px;line-height:1.6;}
   <p id="msg">Processando autenticação...</p>
   <div class="spinner" id="spin"></div>
   <p class="erro" id="err" style="display:none"></p>
-  <p class="ok" id="ok" style="display:none">&#10003; Conectado!</p>
+  <p class="ok" id="ok" style="display:none"></p>
 </div>
 <script>
 var CLIENT_ID = 'b06106e3-083b-4635-b3b4-525ab54197f6';
@@ -32,103 +32,72 @@ var TENANT_ID = '7876d343-00f5-4c18-9764-5133f545aec6';
 var REDIRECT  = 'https://levantamentoconservacao.netlify.app/auth.html';
 var APP_URL   = 'https://levantamentoconservacao.netlify.app';
 
-function mostrarErro(msg){
+function erro(msg){
   document.getElementById('spin').style.display='none';
+  document.getElementById('ico').textContent='❌';
   document.getElementById('err').style.display='block';
-  document.getElementById('err').textContent = msg;
-  document.getElementById('msg').textContent = 'Erro na autenticação.';
-  document.getElementById('ico').textContent = '❌';
+  document.getElementById('err').textContent=msg;
+  document.getElementById('msg').textContent='Erro na autenticação.';
 }
 
-function mostrarOk(){
-  document.getElementById('spin').style.display='none';
-  document.getElementById('ok').style.display='block';
-  document.getElementById('msg').textContent = 'Conectado! Fechando...';
-  document.getElementById('ico').textContent = '✅';
-}
-
-// SPA usa implicit flow ou PKCE - pegar token direto do hash ou trocar code com PKCE
-var params  = new URLSearchParams(window.location.search);
-var hash    = new URLSearchParams(window.location.hash.replace('#',''));
-var code    = params.get('code');
-var error   = params.get('error');
-var idToken = hash.get('id_token');
-var accTok  = hash.get('access_token');
-
-if(error){
-  mostrarErro(params.get('error_description') || error);
-
-} else if(accTok){
-  // Implicit flow - token direto no hash
-  var expiresIn = parseInt(hash.get('expires_in')||'3600');
+function sucesso(data){
+  // Salvar token
   localStorage.setItem('ms_token', JSON.stringify({
-    access_token: accTok,
-    expires: Date.now() + (expiresIn * 1000)
+    access_token: data.access_token,
+    expires: Date.now() + ((data.expires_in||3600)*1000)
   }));
-  mostrarOk();
-  if(window.opener && !window.opener.closed){
-    try{
-      window.opener.postMessage({
-        type:'ms_auth_success',
-        access_token: accTok,
-        expires_in: expiresIn
-      }, APP_URL);
-      setTimeout(function(){ window.close(); }, 1000);
-    }catch(e){ window.location.href = APP_URL; }
-  } else {
-    setTimeout(function(){ window.location.href = APP_URL; }, 1000);
-  }
+  if(data.refresh_token) localStorage.setItem('ms_refresh_token', data.refresh_token);
 
+  document.getElementById('spin').style.display='none';
+  document.getElementById('ico').textContent='✅';
+  document.getElementById('ok').style.display='block';
+  document.getElementById('ok').textContent='Conectado! Fechando...';
+  document.getElementById('msg').textContent='Login realizado com sucesso.';
+
+  // SEMPRE fechar esta aba/popup - nunca redirecionar para o app
+  setTimeout(function(){
+    // Tentar fechar popup
+    window.close();
+    // Se nao fechar (aba normal), redirecionar para o app
+    setTimeout(function(){
+      if(!window.closed){
+        window.location.replace(APP_URL);
+      }
+    }, 500);
+  }, 1000);
+}
+
+var params = new URLSearchParams(window.location.search);
+var code   = params.get('code');
+var errMsg = params.get('error');
+
+if(errMsg){
+  erro(params.get('error_description')||errMsg);
 } else if(code){
-  // Authorization code com PKCE - trocar pelo token
-  var codeVerifier = localStorage.getItem('ms_code_verifier');
-  document.getElementById('msg').textContent = 'Obtendo token...';
+  document.getElementById('msg').textContent='Obtendo token de acesso...';
+  var verifier = localStorage.getItem('ms_code_verifier')||'';
 
   var body = 'client_id='+encodeURIComponent(CLIENT_ID)
     +'&grant_type=authorization_code'
     +'&code='+encodeURIComponent(code)
-    +'&redirect_uri='+encodeURIComponent(REDIRECT);
+    +'&redirect_uri='+encodeURIComponent(REDIRECT)
+    +'&scope='+encodeURIComponent('https://graph.microsoft.com/Files.ReadWrite.All https://graph.microsoft.com/Sites.ReadWrite.All https://graph.microsoft.com/User.Read offline_access');
 
-  if(codeVerifier){
-    body += '&code_verifier='+encodeURIComponent(codeVerifier);
-  }
+  if(verifier) body += '&code_verifier='+encodeURIComponent(verifier);
 
   fetch('https://login.microsoftonline.com/'+TENANT_ID+'/oauth2/v2.0/token',{
     method:'POST',
     headers:{'Content-Type':'application/x-www-form-urlencoded'},
-    body: body
+    body:body
   })
   .then(function(r){return r.json();})
   .then(function(d){
-    if(d.access_token){
-      localStorage.setItem('ms_token', JSON.stringify({
-        access_token: d.access_token,
-        expires: Date.now() + ((d.expires_in||3600) * 1000)
-      }));
-      if(d.refresh_token) localStorage.setItem('ms_refresh_token', d.refresh_token);
-      localStorage.removeItem('ms_code_verifier');
-      mostrarOk();
-      if(window.opener && !window.opener.closed){
-        try{
-          window.opener.postMessage({
-            type:'ms_auth_success',
-            access_token: d.access_token,
-            refresh_token: d.refresh_token||null,
-            expires_in: d.expires_in||3600
-          }, APP_URL);
-          setTimeout(function(){ window.close(); }, 1000);
-        }catch(e){ window.location.href = APP_URL; }
-      } else {
-        setTimeout(function(){ window.location.href = APP_URL; }, 1000);
-      }
-    } else {
-      mostrarErro((d.error_description||d.error||'Token inválido')+'\n\nCód: '+(d.error||''));
-    }
+    if(d.access_token){ sucesso(d); }
+    else { erro((d.error_description||d.error||'Token inválido')); }
   })
-  .catch(function(e){ mostrarErro('Erro de rede: '+e.message); });
-
+  .catch(function(e){ erro('Erro de rede: '+e.message); });
 } else {
-  mostrarErro('Parâmetros de autenticação não encontrados.');
+  erro('Nenhum código de autorização encontrado.');
 }
 </script>
 </body>

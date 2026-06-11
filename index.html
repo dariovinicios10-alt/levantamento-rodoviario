@@ -1169,16 +1169,19 @@ function msLogin(){
       try{
         if(popup && popup.closed){
           clearInterval(timer);
-          // Verificar se token chegou via postMessage
+          // Popup fechou - verificar se token foi salvo
           setTimeout(function(){
             msGetToken().then(function(){
               msCarregarUsuario();
               atuStatusSync();
-            }).catch(function(){});
-          }, 500);
+              toast('Conectado ao SharePoint!');
+            }).catch(function(){
+              toast('Login não concluído. Tente novamente.','e');
+            });
+          }, 800);
         }
       }catch(e){}
-    }, 500);
+    }, 600);
   });
 }
 
@@ -1353,25 +1356,23 @@ function salvarNoOneDrive(){
   msGetToken().then(function(token){
     dbAll().then(function(recs){
       if(!recs.length){ toast('Nenhum registro para salvar','w'); return; }
-      toast('Salvando '+recs.length+' registro(s) no OneDrive...','w');
-      // Marcar todos como nao sincronizados para forcar upload
-      var db;
+      toast('Salvando '+recs.length+' registro(s)...','w');
       abrirDB().then(function(d){
-        db=d;
         var promises = recs.map(function(r){
           return new Promise(function(ok,er){
             r.sincronizado = false;
             var t = d.transaction(ST,'readwrite');
-            var req = t.objectStore(ST).put(r);
-            req.onsuccess=ok; req.onerror=er;
+            t.objectStore(ST).put(r).onsuccess=ok;
           });
         });
         return Promise.all(promises);
       }).then(function(){
-        sincronizarTodos();
+        syncEmAndamento = false;
+        sincronizarPendentes();
       });
     });
-  }).catch(function(){
+  }).catch(function(e){
+    console.log('Erro token:', e);
     toast('Faça login com a conta Microsoft primeiro','e');
     msLogin();
   });
@@ -1401,7 +1402,8 @@ function sincronizarPendentes(){
           syncEmAndamento = false;
           atuStatusSync();
           atuBadge();
-          toast('Sincronizado com SharePoint!');
+          loadExp();
+          toast('✓ Salvo no SharePoint/OneDrive!');
           return;
         }
         sincronizarRegistro(pendentes[idx], token)
