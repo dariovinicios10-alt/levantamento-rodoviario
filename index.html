@@ -1113,31 +1113,54 @@ function msGetToken(){
 }
 
 // --- LOGIN ---
+// Gerar code verifier e challenge para PKCE
+function gerarCodeVerifier(){
+  var arr = new Uint8Array(32);
+  crypto.getRandomValues(arr);
+  return btoa(String.fromCharCode.apply(null,arr)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+}
+async function gerarCodeChallenge(verifier){
+  var data = new TextEncoder().encode(verifier);
+  var digest = await crypto.subtle.digest('SHA-256', data);
+  return btoa(String.fromCharCode.apply(null,new Uint8Array(digest))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+}
+
 function msLogin(){
-  var w = 500, h = 600;
+  var w = 520, h = 640;
   var left = (screen.width/2)-(w/2);
   var top  = (screen.height/2)-(h/2);
-  var authUrl = 'https://login.microsoftonline.com/'+MS_TENANT_ID+'/oauth2/v2.0/authorize'
-    +'?client_id='+MS_CLIENT_ID
-    +'&response_type=code'
-    +'&redirect_uri='+encodeURIComponent('https://levantamentoconservacao.netlify.app/auth.html')
-    +'&scope='+encodeURIComponent(MS_SCOPE)
-    +'&response_mode=query'
-    +'&prompt=select_account';
 
-  var popup = window.open(authUrl,'ms_login','width='+w+',height='+h+',left='+left+',top='+top);
+  var verifier = gerarCodeVerifier();
+  localStorage.setItem('ms_code_verifier', verifier);
 
-  var timer = setInterval(function(){
-    try{
-      if(popup.closed){
-        clearInterval(timer);
-        msGetToken().then(function(){
-          msCarregarUsuario();
-          atuStatusSync();
-        }).catch(function(){});
-      }
-    }catch(e){}
-  }, 500);
+  gerarCodeChallenge(verifier).then(function(challenge){
+    var authUrl = 'https://login.microsoftonline.com/'+MS_TENANT_ID+'/oauth2/v2.0/authorize'
+      +'?client_id='+MS_CLIENT_ID
+      +'&response_type=code'
+      +'&redirect_uri='+encodeURIComponent('https://levantamentoconservacao.netlify.app/auth.html')
+      +'&scope='+encodeURIComponent(MS_SCOPE)
+      +'&response_mode=query'
+      +'&code_challenge='+challenge
+      +'&code_challenge_method=S256'
+      +'&prompt=select_account';
+
+    var popup = window.open(authUrl,'ms_login','width='+w+',height='+h+',left='+left+',top='+top);
+
+    var timer = setInterval(function(){
+      try{
+        if(popup && popup.closed){
+          clearInterval(timer);
+          // Verificar se token chegou via postMessage
+          setTimeout(function(){
+            msGetToken().then(function(){
+              msCarregarUsuario();
+              atuStatusSync();
+            }).catch(function(){});
+          }, 500);
+        }
+      }catch(e){}
+    }, 500);
+  });
 }
 
 function msLogout(){

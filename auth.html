@@ -7,101 +7,128 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
 body{font-family:'Segoe UI',sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;background:#f2f2f2;}
-.box{text-align:center;background:#fff;padding:40px 30px;border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,.12);max-width:320px;width:90%;}
+.box{text-align:center;background:#fff;padding:40px 30px;border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,.12);max-width:340px;width:90%;}
 .ico{font-size:48px;margin-bottom:16px;}
 h3{color:#0e2841;font-size:18px;margin-bottom:8px;}
 p{color:#5a6a7a;font-size:13px;line-height:1.6;}
-.spinner{display:inline-block;width:24px;height:24px;border:3px solid #e0e0e0;border-top-color:#00b050;border-radius:50%;animation:spin 1s linear infinite;margin-top:16px;}
+.spinner{display:inline-block;width:28px;height:28px;border:3px solid #e0e0e0;border-top-color:#00b050;border-radius:50%;animation:spin 1s linear infinite;margin-top:16px;}
 @keyframes spin{to{transform:rotate(360deg)}}
-.erro{color:#e84040;font-size:13px;margin-top:12px;}
+.erro{color:#e84040;font-size:12px;margin-top:12px;line-height:1.5;}
+.ok{color:#00b050;font-size:14px;font-weight:700;margin-top:12px;}
 </style>
 </head>
 <body>
 <div class="box">
-  <div class="ico">&#9729;</div>
+  <div class="ico" id="ico">&#9729;</div>
   <h3>Conectando ao SharePoint</h3>
   <p id="msg">Processando autenticação...</p>
   <div class="spinner" id="spin"></div>
   <p class="erro" id="err" style="display:none"></p>
+  <p class="ok" id="ok" style="display:none">&#10003; Conectado!</p>
 </div>
 <script>
 var CLIENT_ID = 'b06106e3-083b-4635-b3b4-525ab54197f6';
 var TENANT_ID = '7876d343-00f5-4c18-9764-5133f545aec6';
-var SCOPE     = 'https://graph.microsoft.com/Files.ReadWrite.All https://graph.microsoft.com/Sites.ReadWrite.All https://graph.microsoft.com/User.Read offline_access';
 var REDIRECT  = 'https://levantamentoconservacao.netlify.app/auth.html';
+var APP_URL   = 'https://levantamentoconservacao.netlify.app';
 
 function mostrarErro(msg){
   document.getElementById('spin').style.display='none';
   document.getElementById('err').style.display='block';
   document.getElementById('err').textContent = msg;
   document.getElementById('msg').textContent = 'Erro na autenticação.';
+  document.getElementById('ico').textContent = '❌';
 }
 
-var params = new URLSearchParams(window.location.search);
-var code  = params.get('code');
-var error = params.get('error');
+function mostrarOk(){
+  document.getElementById('spin').style.display='none';
+  document.getElementById('ok').style.display='block';
+  document.getElementById('msg').textContent = 'Conectado! Fechando...';
+  document.getElementById('ico').textContent = '✅';
+}
+
+// SPA usa implicit flow ou PKCE - pegar token direto do hash ou trocar code com PKCE
+var params  = new URLSearchParams(window.location.search);
+var hash    = new URLSearchParams(window.location.hash.replace('#',''));
+var code    = params.get('code');
+var error   = params.get('error');
+var idToken = hash.get('id_token');
+var accTok  = hash.get('access_token');
 
 if(error){
-  mostrarErro('Erro: '+( params.get('error_description')||error));
-} else if(code){
-  document.getElementById('msg').textContent = 'Obtendo token de acesso...';
+  mostrarErro(params.get('error_description') || error);
 
-  // Trocar code por token
+} else if(accTok){
+  // Implicit flow - token direto no hash
+  var expiresIn = parseInt(hash.get('expires_in')||'3600');
+  localStorage.setItem('ms_token', JSON.stringify({
+    access_token: accTok,
+    expires: Date.now() + (expiresIn * 1000)
+  }));
+  mostrarOk();
+  if(window.opener && !window.opener.closed){
+    try{
+      window.opener.postMessage({
+        type:'ms_auth_success',
+        access_token: accTok,
+        expires_in: expiresIn
+      }, APP_URL);
+      setTimeout(function(){ window.close(); }, 1000);
+    }catch(e){ window.location.href = APP_URL; }
+  } else {
+    setTimeout(function(){ window.location.href = APP_URL; }, 1000);
+  }
+
+} else if(code){
+  // Authorization code com PKCE - trocar pelo token
+  var codeVerifier = localStorage.getItem('ms_code_verifier');
+  document.getElementById('msg').textContent = 'Obtendo token...';
+
   var body = 'client_id='+encodeURIComponent(CLIENT_ID)
     +'&grant_type=authorization_code'
     +'&code='+encodeURIComponent(code)
-    +'&redirect_uri='+encodeURIComponent(REDIRECT)
-    +'&scope='+encodeURIComponent(SCOPE);
+    +'&redirect_uri='+encodeURIComponent(REDIRECT);
+
+  if(codeVerifier){
+    body += '&code_verifier='+encodeURIComponent(codeVerifier);
+  }
 
   fetch('https://login.microsoftonline.com/'+TENANT_ID+'/oauth2/v2.0/token',{
     method:'POST',
     headers:{'Content-Type':'application/x-www-form-urlencoded'},
-    body:body
+    body: body
   })
   .then(function(r){return r.json();})
   .then(function(d){
     if(d.access_token){
-      // Salvar tokens no localStorage
       localStorage.setItem('ms_token', JSON.stringify({
         access_token: d.access_token,
-        expires: Date.now() + (d.expires_in * 1000)
+        expires: Date.now() + ((d.expires_in||3600) * 1000)
       }));
-      if(d.refresh_token){
-        localStorage.setItem('ms_refresh_token', d.refresh_token);
-      }
-
-      document.getElementById('msg').textContent = 'Conectado! Redirecionando...';
-      document.getElementById('spin').style.display='none';
-      document.getElementById('ico') && (document.querySelector('.ico').textContent='✅');
-
-      // Se veio de popup, notificar janela pai e fechar
+      if(d.refresh_token) localStorage.setItem('ms_refresh_token', d.refresh_token);
+      localStorage.removeItem('ms_code_verifier');
+      mostrarOk();
       if(window.opener && !window.opener.closed){
         try{
           window.opener.postMessage({
             type:'ms_auth_success',
             access_token: d.access_token,
             refresh_token: d.refresh_token||null,
-            expires_in: d.expires_in
-          }, 'https://levantamentoconservacao.netlify.app');
-          setTimeout(function(){ window.close(); }, 800);
-        }catch(e){
-          window.location.href = 'https://levantamentoconservacao.netlify.app';
-        }
+            expires_in: d.expires_in||3600
+          }, APP_URL);
+          setTimeout(function(){ window.close(); }, 1000);
+        }catch(e){ window.location.href = APP_URL; }
       } else {
-        // Redirect direto
-        setTimeout(function(){
-          window.location.href = 'https://levantamentoconservacao.netlify.app';
-        }, 1000);
+        setTimeout(function(){ window.location.href = APP_URL; }, 1000);
       }
     } else {
-      mostrarErro(d.error_description || d.error || 'Token inválido');
+      mostrarErro((d.error_description||d.error||'Token inválido')+'\n\nCód: '+(d.error||''));
     }
   })
-  .catch(function(e){
-    mostrarErro('Erro de rede: '+e.message);
-  });
+  .catch(function(e){ mostrarErro('Erro de rede: '+e.message); });
+
 } else {
-  mostrarErro('Nenhum código de autorização encontrado.');
+  mostrarErro('Parâmetros de autenticação não encontrados.');
 }
 </script>
 </body>
