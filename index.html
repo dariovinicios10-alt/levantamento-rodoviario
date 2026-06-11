@@ -1357,48 +1357,25 @@ window.addEventListener('online', function(){
   msCarregarUsuario();
 });
 
-// Receber code do popup de login
+// Receber token do popup de login (auth.html ja fez a troca do code)
 window.addEventListener('message', function(e){
-  if(e.data && e.data.type==='ms_auth_code' && e.data.code){
-    fetch('https://login.microsoftonline.com/'+MS_TENANT_ID+'/oauth2/v2.0/token',{
-      method:'POST',
-      headers:{'Content-Type':'application/x-www-form-urlencoded'},
-      body:'client_id='+MS_CLIENT_ID+'&grant_type=authorization_code&code='+encodeURIComponent(e.data.code)
-        +'&redirect_uri='+encodeURIComponent('https://levantamentoconservacao.netlify.app/auth.html')
-        +'&scope='+encodeURIComponent(MS_SCOPE)
-    }).then(function(r){return r.json();}).then(function(d){
-      if(d.access_token){
-        localStorage.setItem('ms_token', JSON.stringify({access_token:d.access_token, expires:Date.now()+(d.expires_in*1000)}));
-        if(d.refresh_token) localStorage.setItem('ms_refresh_token', d.refresh_token);
-        msCarregarUsuario();
-        toast('Conectado ao SharePoint!');
-      }
-    });
+  if(!e.data) return;
+  // Sucesso - auth.html ja trocou o code pelo token
+  if(e.data.type==='ms_auth_success' && e.data.access_token){
+    localStorage.setItem('ms_token', JSON.stringify({
+      access_token: e.data.access_token,
+      expires: Date.now() + (e.data.expires_in * 1000)
+    }));
+    if(e.data.refresh_token) localStorage.setItem('ms_refresh_token', e.data.refresh_token);
+    msToken = e.data.access_token;
+    msCarregarUsuario();
+    toast('Conectado ao SharePoint!');
+    // Sincronizar pendentes
+    setTimeout(sincronizarPendentes, 1000);
   }
 });
 
-// Verificar auth code na URL (callback do login)
-(function(){
-  var params = new URLSearchParams(window.location.search);
-  var code = params.get('code');
-  if(code){
-    // Trocar code por token
-    fetch('https://login.microsoftonline.com/'+MS_TENANT_ID+'/oauth2/v2.0/token',{
-      method:'POST',
-      headers:{'Content-Type':'application/x-www-form-urlencoded'},
-      body:'client_id='+MS_CLIENT_ID+'&grant_type=authorization_code&code='+encodeURIComponent(code)
-        +'&redirect_uri='+encodeURIComponent('https://levantamentoconservacao.netlify.app/auth.html')
-        +'&scope='+encodeURIComponent(MS_SCOPE)
-    }).then(function(r){return r.json();}).then(function(d){
-      if(d.access_token){
-        localStorage.setItem('ms_token', JSON.stringify({access_token:d.access_token, expires:Date.now()+(d.expires_in*1000)}));
-        if(d.refresh_token) localStorage.setItem('ms_refresh_token', d.refresh_token);
-        window.history.replaceState({},'',window.location.pathname);
-        msCarregarUsuario();
-      }
-    });
-  }
-})();
+// Auth callback tratado pelo auth.html
 
 
 // INICIAR

@@ -2,37 +2,106 @@
 <html>
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Autenticando...</title>
 <style>
-body{font-family:Arial,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#f2f2f2;}
-.box{text-align:center;background:#fff;padding:30px;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,.1);}
-.logo{font-size:40px;margin-bottom:10px;}
-h3{color:#0e2841;margin:0 0 8px;}
-p{color:#5a6a7a;font-size:13px;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Segoe UI',sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;background:#f2f2f2;}
+.box{text-align:center;background:#fff;padding:40px 30px;border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,.12);max-width:320px;width:90%;}
+.ico{font-size:48px;margin-bottom:16px;}
+h3{color:#0e2841;font-size:18px;margin-bottom:8px;}
+p{color:#5a6a7a;font-size:13px;line-height:1.6;}
+.spinner{display:inline-block;width:24px;height:24px;border:3px solid #e0e0e0;border-top-color:#00b050;border-radius:50%;animation:spin 1s linear infinite;margin-top:16px;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.erro{color:#e84040;font-size:13px;margin-top:12px;}
 </style>
 </head>
 <body>
 <div class="box">
-  <div class="logo">&#9729;</div>
-  <h3>Autenticando com Microsoft...</h3>
-  <p>Aguarde, você será redirecionado.</p>
+  <div class="ico">&#9729;</div>
+  <h3>Conectando ao SharePoint</h3>
+  <p id="msg">Processando autenticação...</p>
+  <div class="spinner" id="spin"></div>
+  <p class="erro" id="err" style="display:none"></p>
 </div>
 <script>
-// Pegar o code da URL e salvar no localStorage para o app principal
+var CLIENT_ID = 'b06106e3-083b-4635-b3b4-525ab54197f6';
+var TENANT_ID = '7876d343-00f5-4c18-9764-5133f545aec6';
+var SCOPE     = 'https://graph.microsoft.com/Files.ReadWrite.All https://graph.microsoft.com/Sites.ReadWrite.All https://graph.microsoft.com/User.Read offline_access';
+var REDIRECT  = 'https://levantamentoconservacao.netlify.app/auth.html';
+
+function mostrarErro(msg){
+  document.getElementById('spin').style.display='none';
+  document.getElementById('err').style.display='block';
+  document.getElementById('err').textContent = msg;
+  document.getElementById('msg').textContent = 'Erro na autenticação.';
+}
+
 var params = new URLSearchParams(window.location.search);
-var code = params.get('code');
-if(code){
-  localStorage.setItem('ms_auth_code', code);
-  // Fechar popup e notificar janela pai
-  if(window.opener){
-    window.opener.postMessage({type:'ms_auth_code', code:code}, '*');
-    setTimeout(function(){ window.close(); }, 500);
-  } else {
-    // Redirect direto para o app com o code
-    window.location.href = 'https://levantamentoconservacao.netlify.app/?code='+encodeURIComponent(code);
-  }
+var code  = params.get('code');
+var error = params.get('error');
+
+if(error){
+  mostrarErro('Erro: '+( params.get('error_description')||error));
+} else if(code){
+  document.getElementById('msg').textContent = 'Obtendo token de acesso...';
+
+  // Trocar code por token
+  var body = 'client_id='+encodeURIComponent(CLIENT_ID)
+    +'&grant_type=authorization_code'
+    +'&code='+encodeURIComponent(code)
+    +'&redirect_uri='+encodeURIComponent(REDIRECT)
+    +'&scope='+encodeURIComponent(SCOPE);
+
+  fetch('https://login.microsoftonline.com/'+TENANT_ID+'/oauth2/v2.0/token',{
+    method:'POST',
+    headers:{'Content-Type':'application/x-www-form-urlencoded'},
+    body:body
+  })
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if(d.access_token){
+      // Salvar tokens no localStorage
+      localStorage.setItem('ms_token', JSON.stringify({
+        access_token: d.access_token,
+        expires: Date.now() + (d.expires_in * 1000)
+      }));
+      if(d.refresh_token){
+        localStorage.setItem('ms_refresh_token', d.refresh_token);
+      }
+
+      document.getElementById('msg').textContent = 'Conectado! Redirecionando...';
+      document.getElementById('spin').style.display='none';
+      document.getElementById('ico') && (document.querySelector('.ico').textContent='✅');
+
+      // Se veio de popup, notificar janela pai e fechar
+      if(window.opener && !window.opener.closed){
+        try{
+          window.opener.postMessage({
+            type:'ms_auth_success',
+            access_token: d.access_token,
+            refresh_token: d.refresh_token||null,
+            expires_in: d.expires_in
+          }, 'https://levantamentoconservacao.netlify.app');
+          setTimeout(function(){ window.close(); }, 800);
+        }catch(e){
+          window.location.href = 'https://levantamentoconservacao.netlify.app';
+        }
+      } else {
+        // Redirect direto
+        setTimeout(function(){
+          window.location.href = 'https://levantamentoconservacao.netlify.app';
+        }, 1000);
+      }
+    } else {
+      mostrarErro(d.error_description || d.error || 'Token inválido');
+    }
+  })
+  .catch(function(e){
+    mostrarErro('Erro de rede: '+e.message);
+  });
 } else {
-  document.querySelector('p').textContent = 'Erro na autenticação. Feche e tente novamente.';
+  mostrarErro('Nenhum código de autorização encontrado.');
 }
 </script>
 </body>
