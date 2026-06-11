@@ -1278,7 +1278,7 @@ function sincronizarRegistro(rec, token){
   var rod  = (rec.rodovia||'OUTROS').replace(/[^a-zA-Z0-9-]/g,'_');
   var fiscal = msUser ? (msUser.displayName||msUser.mail||'fiscal').replace(/[^a-zA-Z0-9 ]/g,'').substring(0,20) : 'fiscal';
 
-  var pastaBase = SP_FOLDER+'/'+ano+'/'+mes+'/'+rod;
+  var pastaBase = 'Documentos/Levantamentos/'+ano+'/'+mes+'/'+rod;
   var pastaFotos = pastaBase+'/fotos';
 
   return spGarantirPasta(token, pastaBase)
@@ -1317,14 +1317,6 @@ function sincronizarRegistro(rec, token){
 
 // --- EXCEL NO SHAREPOINT ---
 function spAtualizarExcel(token, pasta, rec, fiscal){
-  // Usar arquivo CSV simples que o Excel abre nativamente
-  var nomeArquivo = 'levantamentos.csv';
-  var siteId = window._spSiteId||'';
-  var urlArq = siteId
-    ? 'https://graph.microsoft.com/v1.0/sites/'+siteId+'/drive/root:/'+SP_FOLDER+'/levantamentos_geral.csv'
-    : 'https://graph.microsoft.com/v1.0/sites/'+MS_SHAREPOINT+':/sites/conservacao:/drive/root:/'+SP_FOLDER+'/levantamentos_geral.csv';
-
-  // Linha do registro
   var nf = rec.fotos ? rec.fotos.length : 0;
   var linha = [
     rec.id||'',
@@ -1344,30 +1336,36 @@ function spAtualizarExcel(token, pasta, rec, fiscal){
     nf
   ].join(';');
 
-  // Buscar CSV existente e adicionar linha
-  return fetch(urlArq,{headers:{'Authorization':'Bearer '+token}})
-    .then(function(r){
-      if(r.status===404){
-        return 'Reg;Tipo;Data;Hora;Fiscal;Rodovia;Servico;KM Ini;KM Fim;Extensao m;Sentido;Lat;Lon;Obs;Qtd Fotos\n';
-      }
-      return r.text();
-    })
-    .then(function(csvAtual){
-      // Verificar se registro ja existe (pelo ID)
-      var linhas = csvAtual.split('\n');
-      var header = linhas[0];
-      var dados  = linhas.slice(1).filter(function(l){
-        return l.trim() && !l.startsWith(String(rec.id)+';');
+  var HEADER = 'Reg;Tipo;Data;Hora;Fiscal;Rodovia;Servico;KM Ini;KM Fim;Extensao m;Sentido;Lat;Lon;Obs;Qtd Fotos';
+
+  // Garantir que temos o siteId antes de prosseguir
+  return spGetSiteId(token).then(function(siteId){
+    var urlBase = 'https://graph.microsoft.com/v1.0/sites/'+siteId+'/drive/root:/Documentos/Levantamentos/levantamentos_geral.csv';
+
+    // Tentar ler CSV existente
+    return fetch(urlBase, {headers:{'Authorization':'Bearer '+token}})
+      .then(function(r){
+        if(r.ok) return r.text();
+        return HEADER+'\n'; // arquivo novo
+      })
+      .then(function(csvAtual){
+        // Remover linha existente do mesmo registro (evitar duplicata)
+        var linhas = csvAtual.split('\n').filter(function(l){ return l.trim(); });
+        var header = linhas[0] || HEADER;
+        var dados  = linhas.slice(1).filter(function(l){
+          return l.trim() && !l.startsWith(String(rec.id)+';');
+        });
+        dados.push(linha);
+        // Ordenar por data desc
+        var novoCSV = header+'\n'+dados.join('\n')+'\n';
+        var blob = new Blob([novoCSV],{type:'text/csv;charset=utf-8'});
+        return fetch(urlBase,{
+          method:'PUT',
+          headers:{'Authorization':'Bearer '+token,'Content-Type':'text/csv'},
+          body:blob
+        });
       });
-      dados.push(linha);
-      var novoCSV = header+'\n'+dados.join('\n');
-      var blob = new Blob([novoCSV],{type:'text/csv;charset=utf-8'});
-      return fetch(urlArq,{
-        method:'PUT',
-        headers:{'Authorization':'Bearer '+token,'Content-Type':'text/csv'},
-        body:blob
-      });
-    });
+  });
 }
 
 // --- SINCRONIZAR TODOS PENDENTES ---
