@@ -1281,10 +1281,10 @@ function sincronizarRegistro(rec, token){
   var pastaBase = 'Documentos/Levantamentos/'+ano+'/'+mes+'/'+rod;
   var pastaFotos = pastaBase+'/fotos';
 
-  return spGarantirPasta(token, pastaBase)
-    .then(function(){ return spGarantirPasta(token, pastaFotos); })
-    .then(function(){
-      // Subir fotos
+  return spGetSiteId(token)
+    .then(function(sid){ console.log('SiteId OK:', sid); return spGarantirPasta(token, pastaBase); })
+    .then(function(r){ console.log('Pasta base OK:', pastaBase, r); return spGarantirPasta(token, pastaFotos); })
+    .then(function(r){ console.log('Pasta fotos OK:', pastaFotos, r);
       var promessas = [];
       if(rec.fotos && rec.fotos.length){
         rec.fotos.forEach(function(f, fi){
@@ -1294,10 +1294,8 @@ function sincronizarRegistro(rec, token){
       }
       return Promise.all(promessas);
     })
-    .then(function(){
-      // Salvar/atualizar linha no Excel do SharePoint
-      return spAtualizarExcel(token, pastaBase, rec, fiscal);
-    })
+    .then(function(r){ console.log('Fotos OK'); return spAtualizarExcel(token, pastaBase, rec, fiscal); })
+    .then(function(r){ console.log('CSV upload status:', r && r.status); return r; })
     .then(function(){
       // Marcar como sincronizado no IndexedDB
       return abrirDB().then(function(db){
@@ -1338,31 +1336,34 @@ function spAtualizarExcel(token, pasta, rec, fiscal){
 
   var HEADER = 'Reg;Tipo;Data;Hora;Fiscal;Rodovia;Servico;KM Ini;KM Fim;Extensao m;Sentido;Lat;Lon;Obs;Qtd Fotos';
 
-  // Garantir que temos o siteId antes de prosseguir
   return spGetSiteId(token).then(function(siteId){
-    var urlBase = 'https://graph.microsoft.com/v1.0/sites/'+siteId+'/drive/root:/Documentos/Levantamentos/levantamentos_geral.csv';
+    // URL para ler o arquivo existente
+    var urlLer = 'https://graph.microsoft.com/v1.0/sites/'+siteId+'/drive/root:/Documentos/Levantamentos/levantamentos_geral.csv:/content';
 
-    // Tentar ler CSV existente
-    return fetch(urlBase, {headers:{'Authorization':'Bearer '+token}})
+    return fetch(urlLer, {headers:{'Authorization':'Bearer '+token}})
       .then(function(r){
         if(r.ok) return r.text();
-        return HEADER+'\n'; // arquivo novo
+        return HEADER+'\n';
       })
       .then(function(csvAtual){
-        // Remover linha existente do mesmo registro (evitar duplicata)
         var linhas = csvAtual.split('\n').filter(function(l){ return l.trim(); });
         var header = linhas[0] || HEADER;
         var dados  = linhas.slice(1).filter(function(l){
           return l.trim() && !l.startsWith(String(rec.id)+';');
         });
         dados.push(linha);
-        // Ordenar por data desc
         var novoCSV = header+'\n'+dados.join('\n')+'\n';
-        var blob = new Blob([novoCSV],{type:'text/csv;charset=utf-8'});
-        return fetch(urlBase,{
+        var bytes = new TextEncoder().encode(novoCSV);
+        // URL correta para PUT de conteudo no SharePoint
+        var urlSalvar = 'https://graph.microsoft.com/v1.0/sites/'+siteId+'/drive/root:/Documentos/Levantamentos/levantamentos_geral.csv:/content';
+        console.log('Salvando CSV em:', urlSalvar);
+        return fetch(urlSalvar, {
           method:'PUT',
-          headers:{'Authorization':'Bearer '+token,'Content-Type':'text/csv'},
-          body:blob
+          headers:{'Authorization':'Bearer '+token, 'Content-Type':'text/plain;charset=utf-8'},
+          body: bytes
+        }).then(function(r){
+          console.log('CSV salvo, status:', r.status);
+          return r;
         });
       });
   });
@@ -1427,8 +1428,8 @@ function sincronizarPendentes(){
         sincronizarRegistro(pendentes[idx], token)
           .then(function(){ idx++; proxima(); })
           .catch(function(e){ 
-            console.log('Erro sync:', e);
-            toast('Erro ao salvar: '+e.message,'e');
+            console.log('Erro sync detalhado:', e, JSON.stringify(e));
+            toast('Erro: '+(e.message||e.error||JSON.stringify(e)),'e');
             idx++; proxima();
           });
       }
