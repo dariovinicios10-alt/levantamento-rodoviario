@@ -220,7 +220,8 @@ input[readonly]{color:var(--grn);font-size:13px}
   <div style="background:#fff;border:1.5px solid #00b050;border-radius:12px;padding:14px;margin-bottom:14px;">
   <div style="font-size:11px;font-weight:700;color:#0e2841;text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px;">&#9729; SharePoint / OneDrive</div>
   <div id="sync-status-exp" style="font-size:12px;color:#5a6a7a;margin-bottom:10px;">Verificando conexão...</div>
-  <button class="btn" style="background:#0e2841;color:#fff;margin:0 0 6px;" onclick="sincronizarPendentes()">&#9729; SINCRONIZAR AGORA</button>
+  <button class="btn bg" style="margin:0 0 8px;" onclick="salvarNoOneDrive()">&#9729; SALVAR NO ONEDRIVE</button>
+  <button class="btn" style="background:#0e2841;color:#fff;margin:0 0 6px;font-size:12px;padding:10px;" onclick="sincronizarTodos()">&#8635; Sincronizar todos os registros</button>
   <button class="btn bo" style="font-size:12px;padding:9px;margin:0;" onclick="msLogin()">&#128274; Entrar com conta Microsoft</button>
 </div>
 <div class="etit">&#128202; Planilha Excel</div>
@@ -781,7 +782,24 @@ function delServico(i){var cfg=getCfg();cfg.servicos.splice(i,1);saveCfg(cfg);lo
 
 // EXPORT COUNT
 function loadExp(){
-  // Atualizar status sync
+  // Atualizar status sync simples
+  var el2 = document.getElementById('sync-status-exp');
+  msGetToken().then(function(){
+    dbAll().then(function(recs){
+      var pend = recs.filter(function(r){return !r.sincronizado;}).length;
+      var nome = msUser ? (msUser.displayName||'Conectado') : 'Conectado';
+      if(el2){
+        if(pend>0){
+          el2.innerHTML='<b style="color:#00b050">&#9679; '+nome+'</b> &bull; <span style="color:#f5a623">'+pend+' registro(s) pendente(s) de salvar</span>';
+        } else {
+          el2.innerHTML='<b style="color:#00b050">&#9679; '+nome+'</b> &bull; <span style="color:#00b050">Tudo salvo no OneDrive ✓</span>';
+        }
+      }
+    });
+  }).catch(function(){
+    if(el2) el2.innerHTML='<span style="color:#e84040">&#9679; Não conectado</span> &bull; clique em "Entrar com conta Microsoft"';
+  });
+  // Dados
   setTimeout(function(){
     var el2=document.getElementById("sync-status-exp");
     msGetToken().then(function(){
@@ -1340,6 +1358,41 @@ function spAtualizarExcel(token, pasta, rec, fiscal){
 }
 
 // --- SINCRONIZAR TODOS PENDENTES ---
+// Salvar TODOS no OneDrive (botao principal)
+function salvarNoOneDrive(){
+  msGetToken().then(function(token){
+    dbAll().then(function(recs){
+      if(!recs.length){ toast('Nenhum registro para salvar','w'); return; }
+      toast('Salvando '+recs.length+' registro(s) no OneDrive...','w');
+      // Marcar todos como nao sincronizados para forcar upload
+      var db;
+      abrirDB().then(function(d){
+        db=d;
+        var promises = recs.map(function(r){
+          return new Promise(function(ok,er){
+            r.sincronizado = false;
+            var t = d.transaction(ST,'readwrite');
+            var req = t.objectStore(ST).put(r);
+            req.onsuccess=ok; req.onerror=er;
+          });
+        });
+        return Promise.all(promises);
+      }).then(function(){
+        sincronizarTodos();
+      });
+    });
+  }).catch(function(){
+    toast('Faça login com a conta Microsoft primeiro','e');
+    msLogin();
+  });
+}
+
+// Sincronizar todos (forçado)
+function sincronizarTodos(){
+  syncEmAndamento = false; // resetar flag
+  sincronizarPendentes();
+}
+
 function sincronizarPendentes(){
   if(syncEmAndamento) return;
   syncEmAndamento = true;
